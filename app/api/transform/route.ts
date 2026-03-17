@@ -77,10 +77,14 @@ export async function POST(req: NextRequest) {
         console.log("[TRANSFORM] Replicate Input (nano-banana):", JSON.stringify(input));
         output = await replicate.run(model, { input });
       } else {
-        // Nano Banana Pro: same image_input structure, no negative prompt override
+        // Nano Banana Pro: image_input array with extended controls
         const input = {
           prompt: userInput,
           image_input: [formattedImage],
+          resolution: "1K",
+          aspect_ratio: "match_input_image",
+          safety_filter_level: "block_only_high",
+          allow_fallback_model: true,
           output_format: "jpg" as const,
         };
         console.log("[TRANSFORM] Replicate Input (nano-pro):", JSON.stringify(input));
