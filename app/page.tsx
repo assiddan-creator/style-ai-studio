@@ -187,6 +187,30 @@ const PRESETS_NANO = {
   ],
 } as const;
 
+// Archive all legacy presets (kept for safety, not used directly by the new UI catalog)
+const LEGACY_PRESETS = {
+  nano: PRESETS_NANO,
+  flux: PRESETS_FLUX,
+} as const;
+
+// New active catalog for UI organization (reuses legacy IDs & prompts)
+const ACTIVE_PRESETS = {
+  men: {
+    hipsters: ["M17", "M27", "M28"], // Indie / gallery / soft cargo styles
+    goodBoys: ["M1", "M5", "M18"], // Clean denim / smart casual / prep
+    casual: ["M6", "M9", "M20"], // Relaxed barrel denim / grandpa sneakers / color-pop base
+    nightOut: ["M11", "M26"], // Night out sheer layer / indie night
+    familyEvent: ["M5", "M21", "M24"], // Smart casual / leather weekend / striped riviera
+  },
+  women: {
+    casual: ["W1", "W5", "W9"], // Barrel denim / mom outfit / soft office
+    nightOut: ["W17", "W30"], // Israeli night out / festival polish
+    familyEvent: ["W5", "W24", "W25"], // Elevated mom / chocolate minimal / resort maxi
+    hipsterEdgy: ["L8", "W3", "W15"], // Indie sleaze / sneakerina city / dark romantic
+    swimwear: ["W12"], // Beach club linen set as beach/swim-adjacent look
+  },
+} as const;
+
 // ─── FLUX PRESETS ─────────────────────────────────────────────────────────────
 const FLUX_PREFIX =
   "RAW photorealistic portrait. 100% EXACT FACIAL IDENTITY MATCH. Keep the same person, same facial proportions, original background, and exact pose. Emphasize natural skin texture and micro-details. NO plastic skin, NO CGI. Apply the following styling: ";
