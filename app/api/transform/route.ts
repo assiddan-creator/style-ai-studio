@@ -45,11 +45,12 @@ export async function POST(req: NextRequest) {
     let output: unknown;
 
     if (engine === "flux-pro") {
-      // FLUX.2 [pro]: single image is passed as `input_image`
+      // FLUX.2 [pro]: expects `input_images` as an array of image data URIs
       const input = {
         prompt: userInput,
-        input_image: dataUri,
-        output_format: "webp" as const,
+        input_images: [formattedImage],
+        aspect_ratio: "match_input_image" as const,
+        output_format: "jpg" as const,
         safety_tolerance: 2,
       };
       console.log("[TRANSFORM] Replicate Input (flux):", JSON.stringify(input));
