@@ -597,12 +597,8 @@ export default function StyleBooth() {
     setError(null);
     const t0 = performance.now();
     try {
-      const fullPrompt =
-        (engine === "flux-pro" ? FLUX_PREFIX : NANO_PREFIX) +
-        preset.prompt +
-        (engine === "flux-pro" ? FLUX_SUFFIX : NANO_SUFFIX);
-
-      const base64 = await new Promise<string>((resolve, reject) => {
+      // First, compress Image A and convert to base64
+      const base64A = await new Promise<string>((resolve, reject) => {
         const img = new Image();
         const objectUrl = URL.createObjectURL(blob);
         img.onload = () => {
@@ -635,10 +631,36 @@ export default function StyleBooth() {
         };
         img.src = objectUrl;
       });
+
+      // Ask Gemini to build the core fashion prompt (backwards compatible: only Image A + preset for now)
+      const promptRes = await fetch("/api/prompt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageBase64A: base64A,
+          presetPrompt: preset.prompt,
+        }),
+      });
+      if (!promptRes.ok) {
+        const err = await promptRes.json().catch(() => ({}));
+        throw new Error(
+          (err as { error?: string }).error || `שגיאת יצירת פרומפט: ${promptRes.status}`
+        );
+      }
+      const promptData = (await promptRes.json()) as { prompt: string };
+
+      const fullPrompt =
+        (engine === "flux-pro" ? FLUX_PREFIX : NANO_PREFIX) +
+        promptData.prompt +
+        (engine === "flux-pro" ? FLUX_SUFFIX : NANO_SUFFIX);
+
+      // For now we send only Image A; later this can become [base64A, base64B]
+      const imagesBase64 = [base64A];
+
       const res = await fetch("/api/transform", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userInput: fullPrompt, imageBase64: base64, engine }),
+        body: JSON.stringify({ userInput: fullPrompt, imagesBase64, engine }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

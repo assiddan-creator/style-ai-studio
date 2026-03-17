@@ -18,28 +18,36 @@ type EngineKey = keyof typeof MODELS;
 
 export async function POST(req: NextRequest) {
   try {
-    const { userInput, imageBase64, engine = "nano-pro" } = await req.json() as {
-      userInput: string;
-      imageBase64: string;
-      engine?: EngineKey;
-    };
+    const { userInput, imageBase64, imagesBase64, engine = "nano-pro" } =
+      (await req.json()) as {
+        userInput: string;
+        imageBase64?: string;
+        imagesBase64?: string[];
+        engine?: EngineKey;
+      };
 
-    if (!userInput || !imageBase64) {
+    const rawImages =
+      imagesBase64 && imagesBase64.length > 0
+        ? imagesBase64
+        : imageBase64
+          ? [imageBase64]
+          : [];
+
+    if (!userInput || rawImages.length === 0) {
       return NextResponse.json(
-        { error: "Missing userInput or imageBase64" },
+        { error: "Missing userInput or image data" },
         { status: 400 }
       );
     }
 
     const model = MODELS[engine] ?? MODELS["nano-pro"];
 
-    // Ensure we have a proper data URI when needed
-    let formattedImage = imageBase64;
-    if (!formattedImage.startsWith("data:image")) {
-      formattedImage = `data:image/jpeg;base64,${imageBase64}`;
-    }
+    // Ensure we have proper data URIs when needed
+    const formattedImages = rawImages.map((img) =>
+      img.startsWith("data:image") ? img : `data:image/jpeg;base64,${img}`
+    );
 
-    const dataUri = formattedImage;
+    const primaryImage = formattedImages[0];
 
     console.log(`[TRANSFORM] Engine: ${engine} | Preset: ${userInput.slice(0, 60)}...`);
 
@@ -49,7 +57,7 @@ export async function POST(req: NextRequest) {
       // FLUX.2 [pro]: expects `input_images` as an array of image data URIs
       const input = {
         prompt: userInput,
-        input_images: [formattedImage],
+        input_images: formattedImages,
         aspect_ratio: "match_input_image" as const,
         output_format: "jpg" as const,
         safety_tolerance: 2,
@@ -60,7 +68,7 @@ export async function POST(req: NextRequest) {
       // Seedream 5 Lite: image-to-image via `image_input` array with 2K size and single image
       const input = {
         prompt: userInput,
-        image_input: [formattedImage],
+        image_input: formattedImages,
         size: "2K" as const,
         sequential_image_generation: "disabled" as const,
         output_format: "jpeg" as const,
@@ -73,7 +81,7 @@ export async function POST(req: NextRequest) {
         // Standard Nano Banana: data URI in image_input array + negative prompt
         const input = {
           prompt: userInput,
-          image_input: [formattedImage],
+          image_input: [primaryImage],
           negative_prompt: "blurry, low quality, distorted, deformed",
           output_format: "jpg" as const,
         };
@@ -83,7 +91,7 @@ export async function POST(req: NextRequest) {
         // Nano Banana Pro: image_input array with extended controls
         const input = {
           prompt: userInput,
-          image_input: [formattedImage],
+          image_input: [primaryImage],
           resolution: "1K",
           aspect_ratio: "match_input_image",
           safety_filter_level: "block_only_high",
@@ -96,7 +104,7 @@ export async function POST(req: NextRequest) {
         // Nano Banana 2 (Fast): image_input array with 1K resolution and disabled search features
         const input = {
           prompt: userInput,
-          image_input: [formattedImage],
+          image_input: [primaryImage],
           resolution: "1K",
           aspect_ratio: "match_input_image",
           google_search: false,
