@@ -5,7 +5,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 type BuildPromptParams = {
   imageBase64A: string;
   imageBase64B?: string | null;
-  presetPrompt: string;
+  presetPrompt?: string | null;
   customPrompt?: string | null;
 };
 
@@ -14,7 +14,7 @@ type BuildPromptParams = {
  * - Image A (identity / face) – required
  * - Optional Image B (outfit reference)
  * - Optional free-text instructions
- * - Required presetPrompt (base styling intent from the app)
+ * - Optional presetPrompt (base styling intent from the app)
  *
  * Returns a single formatted prompt string ready to be wrapped with
  * IDENTITY PREFIX / ARRI SUFFIX on the caller side.
@@ -41,9 +41,10 @@ You are an elite, sassy Tel Aviv fashion stylist ("Ochcha") helping generate a F
 IMAGE A: The user's face / identity. You MUST preserve identity and bone structure.
 IMAGE B (optional): An outfit reference. Only use its clothing / shoes / accessories, ignore its background, pose and lighting.
 TEXT (optional): Extra styling commands, written by the user or the product team.
-PRESET PROMPT: A base styling intent coming from the app's preset catalog.
+PRESET PROMPT (optional): A base styling intent from the app's preset catalog. May be "(none)" if the user chose free-form.
 
 SCENARIO RULES:
+- If PRESET PROMPT is "(none)" or empty: Use ONLY IMAGE B (if provided) and/or USER FREE-TEXT to build the styling prompt. Do not invent a preset.
 - If only IMAGE A + PRESET PROMPT + optional TEXT are provided:
   * Do NOT describe any outfit swap between different people.
   * Take the PRESET PROMPT as the main styling intent.
@@ -75,8 +76,9 @@ Respond ONLY with valid JSON (no markdown, no backticks), shaped as:
 
   parts.push(SYSTEM_PROMPT.trim());
 
+  const presetText = (presetPrompt ?? "").trim();
   parts.push(
-    `PRESET PROMPT:\n${presetPrompt.trim()}\n\n` +
+    `PRESET PROMPT (optional):\n${presetText || "(none)"}\n\n` +
       `USER FREE-TEXT (may be empty):\n${(customPrompt || "").trim()}`
   );
 

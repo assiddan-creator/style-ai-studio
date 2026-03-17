@@ -12,9 +12,19 @@ export async function POST(req: NextRequest) {
 
     const { imageBase64A, imageBase64B, presetPrompt, customPrompt } = body;
 
-    if (!imageBase64A || !presetPrompt) {
+    if (!imageBase64A) {
       return NextResponse.json(
-        { error: "Missing imageBase64A or presetPrompt" },
+        { error: "Missing imageBase64A" },
+        { status: 400 }
+      );
+    }
+
+    const hasPreset = typeof presetPrompt === "string" && presetPrompt.trim().length > 0;
+    const hasCustom = typeof customPrompt === "string" && customPrompt.trim().length > 0;
+    const hasImageB = Boolean(imageBase64B);
+    if (!hasPreset && !hasCustom && !hasImageB) {
+      return NextResponse.json(
+        { error: "Provide at least one of: presetPrompt, customPrompt, or imageBase64B" },
         { status: 400 }
       );
     }
@@ -22,7 +32,7 @@ export async function POST(req: NextRequest) {
     const finalCorePrompt = await buildFashionPrompt({
       imageBase64A,
       imageBase64B: imageBase64B ?? undefined,
-      presetPrompt,
+      presetPrompt: hasPreset ? presetPrompt : undefined,
       customPrompt: customPrompt ?? undefined,
     });
 

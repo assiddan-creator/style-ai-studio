@@ -589,8 +589,11 @@ export default function StyleBooth() {
 
   const generateLook = useCallback(async () => {
     const blob = capturedBlobRef.current;
-    const preset = findPreset(selectedPresetId ?? "", engine);
-    if (!blob || !preset) return;
+    const preset = selectedPresetId ? findPreset(selectedPresetId, engine) : undefined;
+    const hasImageB = Boolean(secondImageBlobRef.current);
+    const hasCustomText = typeof customPrompt === "string" && customPrompt.trim().length > 0;
+    const valid = blob && (preset || hasImageB || hasCustomText);
+    if (!valid) return;
     setStep("generating");
     setStatusMsg(
       `${
@@ -678,14 +681,14 @@ export default function StyleBooth() {
         });
       }
 
-      // Ask Gemini to build the core fashion prompt (Image A + optional Image B + optional custom text)
+      // Ask Gemini to build the core fashion prompt (Image A + optional Image B + optional preset + optional custom text)
       const promptRes = await fetch("/api/prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imageBase64A: base64A,
           imageBase64B: base64B ?? null,
-          presetPrompt: preset.prompt,
+          presetPrompt: preset?.prompt ?? "",
           customPrompt: customPrompt.trim() || null,
         }),
       });
@@ -770,7 +773,7 @@ export default function StyleBooth() {
         <div className="w-full max-w-md flex flex-col items-center gap-8">
           <div className="text-center space-y-1">
             <p className="text-[10px] uppercase tracking-[0.4em] text-[#c084a0] font-medium">Your Look</p>
-            <h2 className="text-2xl font-bold text-[#f0eaec] tracking-tight">{activePreset?.label}</h2>
+            <h2 className="text-2xl font-bold text-[#f0eaec] tracking-tight">{activePreset?.label ?? "Free-form"}</h2>
             <p className="text-[11px] text-[#4a4450]">
               {engine === "flux-pro"
                 ? "FLUX 2 Pro"
@@ -845,7 +848,7 @@ export default function StyleBooth() {
                   {recommendedIds.map((id) => {
                     const p = findPreset(id, engine);
                     return p ? (
-                      <button key={id} type="button" onClick={() => setSelectedPresetId(id)}
+                      <button key={id} type="button" onClick={() => setSelectedPresetId((prev) => (prev === id ? null : id))}
                         className="text-[11px] px-2.5 py-1 rounded-lg bg-[#c084a0]/10 text-[#c084a0] border border-[#c084a0]/20 hover:bg-[#c084a0]/20 transition-colors font-medium">
                         {p.label}
                       </button>
@@ -854,7 +857,7 @@ export default function StyleBooth() {
                   {wildcardId && (() => {
                     const p = findPreset(wildcardId, engine);
                     return p ? (
-                      <button type="button" onClick={() => setSelectedPresetId(wildcardId)}
+                      <button type="button" onClick={() => setSelectedPresetId((prev) => (prev === wildcardId ? null : wildcardId))}
                         className="text-[11px] px-2.5 py-1 rounded-lg bg-[#2a2218] text-[#c4a45a] border border-[#c4a45a]/20 hover:bg-[#c4a45a]/10 transition-colors font-medium">
                         ✦ {p.label}
                       </button>
@@ -976,7 +979,7 @@ export default function StyleBooth() {
               const isWildcard = wildcardId === preset.id;
               const isSelected = selectedPresetId === preset.id;
               return (
-                <button key={preset.id} type="button" onClick={() => setSelectedPresetId(preset.id)}
+                <button key={preset.id} type="button" onClick={() => setSelectedPresetId((prev) => (prev === preset.id ? null : preset.id))}
                   className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border text-center transition-all ${
                     isSelected
                       ? "bg-[#1e1318] border-[#c084a0] text-[#f0eaec]"
@@ -993,11 +996,11 @@ export default function StyleBooth() {
           </div>
 
           <button type="button" onClick={generateLook}
-            disabled={!selectedPresetId || step === "generating"}
+            disabled={step === "generating" || (!selectedPresetId && !secondImagePreview && !customPrompt.trim())}
             className="w-full py-4 rounded-xl font-bold text-sm tracking-widest uppercase bg-[#f0eaec] text-[#0e0c10] hover:bg-white transition-colors disabled:opacity-25 disabled:cursor-not-allowed">
             {step === "generating"
               ? <span className="animate-pulse text-[#6a6470]">{statusMsg || "מייצר…"}</span>
-              : `Generate${selectedPresetId ? ` — ${findPreset(selectedPresetId, engine)?.label}` : ""}`}
+              : `Generate${selectedPresetId ? ` — ${findPreset(selectedPresetId, engine)?.label}` : secondImagePreview || customPrompt.trim() ? " (free-form)" : ""}`}
           </button>
 
           <button type="button" onClick={resetToCapture}
