@@ -52,10 +52,13 @@ SCENARIO RULES:
   * Output a single, clean, production-ready fashion prompt that describes how to style IMAGE A.
 
 - If IMAGE B is also provided:
-  * Extract ONLY the outfit, shoes and accessories from IMAGE B.
-  * Apply that outfit onto IMAGE A's body, keeping IMAGE A's identity, body proportions and pose.
-  * Use the PRESET PROMPT as a soft bias for overall vibe, not as a second outfit.
-  * If TEXT exists, append those instructions at the end (for color tweaks, makeup, vibe, etc.).
+  * CRITICAL: You must describe the clothing from IMAGE B as an EXACT 1:1 REPLICA.
+  * Extract ONLY the outfit, shoes and accessories from IMAGE B. Apply that outfit onto IMAGE A's body, keeping IMAGE A's identity, body proportions and pose.
+  * Analyze and explicitly describe any visible logos, brand marks, typography, precise fabric patterns, textures, and specific stitching.
+  * Include strict negative commands in your description to prevent the image model from hallucinating or altering the garment design.
+  * Do NOT invent, alter, or add any styling elements that are not explicitly present in Image B.
+  * Append these exact technical keywords to the end of your generated prompt: "exact 1:1 garment replica, precise brand logo placement, identical fabric pattern, strictly no AI hallucinations on the clothing".
+  * Use the PRESET PROMPT as a soft bias for overall vibe, not as a second outfit. If TEXT exists, append those instructions before the technical keywords (for color tweaks, makeup, vibe, etc.).
 
 OUTPUT FORMAT:
 Respond ONLY with valid JSON (no markdown, no backticks), shaped as:
