@@ -418,28 +418,32 @@ async function resizeAndCompress(source: Blob, maxDim = 1024, quality = 0.85): P
 }
 
 export default function StyleBooth() {
-  const videoRef        = useRef<HTMLVideoElement>(null);
-  const canvasRef       = useRef<HTMLCanvasElement>(null);
-  const fileInputRef    = useRef<HTMLInputElement>(null);
-  const capturedBlobRef = useRef<Blob | null>(null);
+  const videoRef           = useRef<HTMLVideoElement>(null);
+  const canvasRef          = useRef<HTMLCanvasElement>(null);
+  const fileInputRef       = useRef<HTMLInputElement>(null);
+  const secondFileInputRef = useRef<HTMLInputElement>(null);
+  const capturedBlobRef    = useRef<Blob | null>(null);
+  const secondImageBlobRef  = useRef<Blob | null>(null);
 
-  const [stream,           setStream]           = useState<MediaStream | null>(null);
-  const [cameraActive,     setCameraActive]     = useState(false);
-  const [inputMode,        setInputMode]        = useState<InputMode>("camera");
-  const [capturedImage,    setCapturedImage]    = useState<string | null>(null);
-  const [step,             setStep]             = useState<AppStep>("capture");
-  const [analysisText,     setAnalysisText]     = useState("");
-  const [recommendedIds,   setRecommendedIds]   = useState<string[]>([]);
-  const [wildcardId,       setWildcardId]       = useState<string | null>(null);
-  const [activeCategory,   setActiveCategory]   = useState<CategoryKey>("beauty");
-  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
-  const [engine,           setEngine]           = useState<Engine>("nano-pro");
-  const [outputUrl,        setOutputUrl]        = useState<string | null>(null);
-  const [history,          setHistory]          = useState<string[]>([]);
-  const [latency,          setLatency]          = useState<number | null>(null);
-  const [statusMsg,        setStatusMsg]        = useState("");
-  const [error,            setError]            = useState<string | null>(null);
-  const [countdown,        setCountdown]        = useState<0 | 1 | 2 | 3>(0);
+  const [stream,             setStream]             = useState<MediaStream | null>(null);
+  const [cameraActive,       setCameraActive]       = useState(false);
+  const [inputMode,          setInputMode]          = useState<InputMode>("camera");
+  const [capturedImage,      setCapturedImage]      = useState<string | null>(null);
+  const [secondImagePreview, setSecondImagePreview] = useState<string | null>(null);
+  const [customPrompt,       setCustomPrompt]       = useState("");
+  const [step,               setStep]               = useState<AppStep>("capture");
+  const [analysisText,       setAnalysisText]       = useState("");
+  const [recommendedIds,     setRecommendedIds]     = useState<string[]>([]);
+  const [wildcardId,         setWildcardId]         = useState<string | null>(null);
+  const [activeCategory,     setActiveCategory]     = useState<CategoryKey>("beauty");
+  const [selectedPresetId,   setSelectedPresetId]   = useState<string | null>(null);
+  const [engine,             setEngine]             = useState<Engine>("nano-pro");
+  const [outputUrl,          setOutputUrl]          = useState<string | null>(null);
+  const [history,            setHistory]            = useState<string[]>([]);
+  const [latency,            setLatency]            = useState<number | null>(null);
+  const [statusMsg,          setStatusMsg]          = useState("");
+  const [error,              setError]              = useState<string | null>(null);
+  const [countdown,          setCountdown]          = useState<0 | 1 | 2 | 3>(0);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -503,7 +507,10 @@ export default function StyleBooth() {
 
   const resetToCapture = useCallback(() => {
     setCapturedImage((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    setSecondImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    setCustomPrompt("");
     capturedBlobRef.current = null;
+    secondImageBlobRef.current = null;
     setStep("capture"); setAnalysisText(""); setRecommendedIds([]); setWildcardId(null);
     setSelectedPresetId(null); setOutputUrl(null); setError(null);
   }, []);
@@ -632,13 +639,54 @@ export default function StyleBooth() {
         img.src = objectUrl;
       });
 
-      // Ask Gemini to build the core fashion prompt (backwards compatible: only Image A + preset for now)
+      // Optionally compress Image B (outfit reference) with same logic as Image A
+      let base64B: string | undefined;
+      const blobB = secondImageBlobRef.current;
+      if (blobB) {
+        base64B = await new Promise<string>((resolve, reject) => {
+          const img = new Image();
+          const objectUrl = URL.createObjectURL(blobB);
+          img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            const maxDim = 1024;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              reject(new Error("No 2D context"));
+              return;
+            }
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+            const prefix = "data:image/jpeg;base64,";
+            const base64String = dataUrl.startsWith(prefix)
+              ? dataUrl.slice(prefix.length)
+              : dataUrl.split(",")[1] ?? "";
+            resolve(base64String);
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error("Image load error"));
+          };
+          img.src = objectUrl;
+        });
+      }
+
+      // Ask Gemini to build the core fashion prompt (Image A + optional Image B + optional custom text)
       const promptRes = await fetch("/api/prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imageBase64A: base64A,
+          imageBase64B: base64B ?? null,
           presetPrompt: preset.prompt,
+          customPrompt: customPrompt.trim() || null,
         }),
       });
       if (!promptRes.ok) {
@@ -654,8 +702,7 @@ export default function StyleBooth() {
         promptData.prompt +
         (engine === "flux-pro" ? FLUX_SUFFIX : NANO_SUFFIX);
 
-      // For now we send only Image A; later this can become [base64A, base64B]
-      const imagesBase64 = [base64A];
+      const imagesBase64 = base64B ? [base64A, base64B] : [base64A];
 
       const res = await fetch("/api/transform", {
         method: "POST",
@@ -677,7 +724,7 @@ export default function StyleBooth() {
       setError(err instanceof Error ? err.message : "הייצור נכשל");
       setStep("pick-preset");
     } finally { setStatusMsg(""); }
-  }, [selectedPresetId, engine]);
+  }, [selectedPresetId, engine, customPrompt]);
 
   const handleFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -689,6 +736,22 @@ export default function StyleBooth() {
     await analyzeWithGemini(optimized);
     e.target.value = "";
   }, [analyzeWithGemini]);
+
+  const handleSecondImageChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setSecondImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    const optimized = await resizeAndCompress(file);
+    secondImageBlobRef.current = optimized;
+    setSecondImagePreview(URL.createObjectURL(optimized));
+    e.target.value = "";
+  }, []);
+
+  const clearSecondImage = useCallback(() => {
+    setSecondImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+    secondImageBlobRef.current = null;
+  }, []);
 
   const switchMode = useCallback((mode: InputMode) => {
     setInputMode(mode); setError(null);
@@ -855,6 +918,42 @@ export default function StyleBooth() {
                 }`}>
                 Seedream 5
               </button>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#161318] border border-[#2a2530] space-y-4">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-[#8a8090] font-medium text-right">
+              תמונה ב׳: השראת לבוש (אופציונלי)
+            </p>
+            <div className="flex items-center gap-3">
+              {secondImagePreview ? (
+                <>
+                  <img src={secondImagePreview} alt="Outfit reference" className="w-20 h-20 object-cover rounded-xl border border-[#2a2530] flex-shrink-0" />
+                  <button type="button" onClick={clearSecondImage}
+                    className="text-xs text-[#8a8090] hover:text-[#c084a0] transition-colors underline">
+                    הסר תמונה
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={() => secondFileInputRef.current?.click()}
+                  className="flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[#3a3540] hover:border-[#c084a0]/50 text-[#5a5460] hover:text-[#c084a0] transition-all text-sm">
+                  <span>🖼️</span>
+                  בחר תמונה
+                </button>
+              )}
+            </div>
+            <input ref={secondFileInputRef} type="file" accept="image/*" onChange={handleSecondImageChange} className="hidden" />
+            <div>
+              <label className="block text-[10px] uppercase tracking-[0.3em] text-[#8a8090] font-medium text-right mb-2">
+                בקשות מיוחדות (אופציונלי)
+              </label>
+              <textarea
+                value={customPrompt}
+                onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="הוסף הוראות סטיילינג, צבעים, או אווירה..."
+                rows={2}
+                className="w-full px-4 py-3 rounded-xl bg-[#0e0c10] border border-[#2a2530] text-[#f0eaec] placeholder-[#4a4450] text-sm resize-none focus:outline-none focus:border-[#c084a0]/50 transition-colors"
+              />
             </div>
           </div>
 
