@@ -663,7 +663,11 @@ export default function StyleBooth() {
             <p className="text-[10px] uppercase tracking-[0.4em] text-[#c084a0] font-medium">Your Look</p>
             <h2 className="text-2xl font-bold text-[#f0eaec] tracking-tight">{activePreset?.label}</h2>
             <p className="text-[11px] text-[#4a4450]">
-              {engine === "flux-pro" ? "FLUX 2 Pro" : engine === "seedream" ? "Seedream 5 Lite" : "Nano Banana Pro"}
+              {engine === "flux-pro"
+                ? "FLUX 2 Pro"
+                : engine === "seedream"
+                  ? "Seedream 5"
+                  : "Nano Banana Pro"}
             </p>
           </div>
           <div className="relative w-full rounded-2xl overflow-hidden border border-[#2a2530]" style={{ boxShadow: "0 32px 64px rgba(0,0,0,0.6)" }}>
@@ -793,7 +797,7 @@ export default function StyleBooth() {
                     ? "bg-[#111820] border-[#8b5cf6]/50 text-[#c4b5fd]"
                     : "bg-transparent border-[#2a2530] text-[#4a4450] hover:text-[#8a8090] hover:border-[#3a3540]"
                 }`}>
-                Seedream 5 Lite
+                Seedream 5
               </button>
             </div>
           </div>

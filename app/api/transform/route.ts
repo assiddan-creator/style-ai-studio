@@ -56,11 +56,13 @@ export async function POST(req: NextRequest) {
       console.log("[TRANSFORM] Replicate Input (flux):", JSON.stringify(input));
       output = await replicate.run(model, { input });
     } else if (engine === "seedream") {
-      // Seedream 5 Lite: image-to-image via `image_input` array
+      // Seedream 5 Lite: image-to-image via `image_input` array with 2K size and single image
       const input = {
         prompt: userInput,
-        image_input: [dataUri],
+        image_input: [formattedImage],
         size: "2K" as const,
+        sequential_image_generation: "disabled" as const,
+        output_format: "jpeg" as const,
       };
       console.log("[TRANSFORM] Replicate Input (seedream):", JSON.stringify(input));
       output = await replicate.run(model, { input });
