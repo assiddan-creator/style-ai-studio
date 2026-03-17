@@ -9,6 +9,7 @@ const replicate = new Replicate({
 const MODELS = {
   "nano-banana": "google/nano-banana",
   "nano-pro": "google/nano-banana-pro",
+  "nano-2": "google/nano-banana-2",
   "flux-pro": "black-forest-labs/flux-2-pro",
   "seedream": "bytedance/seedream-5-lite",
 } as const;
@@ -67,7 +68,7 @@ export async function POST(req: NextRequest) {
       console.log("[TRANSFORM] Replicate Input (seedream):", JSON.stringify(input));
       output = await replicate.run(model, { input });
     } else {
-      // Nano Banana & Nano Banana Pro
+      // Nano Banana family: nano-banana, nano-pro, nano-2
       if (engine === "nano-banana") {
         // Standard Nano Banana: data URI in image_input array + negative prompt
         const input = {
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
         };
         console.log("[TRANSFORM] Replicate Input (nano-banana):", JSON.stringify(input));
         output = await replicate.run(model, { input });
-      } else {
+      } else if (engine === "nano-pro") {
         // Nano Banana Pro: image_input array with extended controls
         const input = {
           prompt: userInput,
@@ -90,6 +91,19 @@ export async function POST(req: NextRequest) {
           output_format: "jpg" as const,
         };
         console.log("[TRANSFORM] Replicate Input (nano-pro):", JSON.stringify(input));
+        output = await replicate.run(model, { input });
+      } else {
+        // Nano Banana 2 (Fast): image_input array with 1K resolution and disabled search features
+        const input = {
+          prompt: userInput,
+          image_input: [formattedImage],
+          resolution: "1K",
+          aspect_ratio: "match_input_image",
+          google_search: false,
+          image_search: false,
+          output_format: "jpg" as const,
+        };
+        console.log("[TRANSFORM] Replicate Input (nano-2):", JSON.stringify(input));
         output = await replicate.run(model, { input });
       }
     }

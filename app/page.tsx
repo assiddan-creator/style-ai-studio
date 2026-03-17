@@ -5,7 +5,7 @@ import { useRef, useState, useCallback, useEffect, ChangeEvent } from "react";
 type InputMode = "camera" | "upload";
 type AppStep = "capture" | "analyzing" | "pick-preset" | "generating" | "result";
 type CategoryKey = "beauty" | "accessories" | "tops" | "bottoms" | "men" | "women";
-type Engine = "nano-banana" | "nano-pro" | "flux-pro" | "seedream";
+type Engine = "nano-banana" | "nano-pro" | "nano-2" | "flux-pro" | "seedream";
 
 const CATEGORIES: Record<CategoryKey, { label: string; emoji: string }> = {
   beauty:      { label: "ביוטי & איפור",    emoji: "💄" },
@@ -778,6 +778,16 @@ export default function StyleBooth() {
                     : "bg-transparent border-[#2a2530] text-[#4a4450] hover:text-[#8a8090] hover:border-[#3a3540]"
                 }`}>
                 Nano Banana Pro
+              </button>
+              <button
+                type="button"
+                onClick={() => setEngine("nano-2")}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-all tracking-wide ${
+                  engine === "nano-2"
+                    ? "bg-[#1e1a20] border-[#4ade80]/50 text-[#bbf7d0]"
+                    : "bg-transparent border-[#2a2530] text-[#4a4450] hover:text-[#8a8090] hover:border-[#3a3540]"
+                }`}>
+                Nano Banana 2 (Fast)
               </button>
               <button
                 type="button"
