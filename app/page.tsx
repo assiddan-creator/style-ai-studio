@@ -5,7 +5,7 @@ import { useRef, useState, useCallback, useEffect, ChangeEvent } from "react";
 type InputMode = "camera" | "upload";
 type AppStep = "capture" | "analyzing" | "pick-preset" | "generating" | "result";
 type CategoryKey = "beauty" | "accessories" | "tops" | "bottoms" | "men" | "women";
-type Engine = "nano-banana" | "flux";
+type Engine = "nano-banana" | "nano-pro" | "flux-pro" | "seedream";
 
 const CATEGORIES: Record<CategoryKey, { label: string; emoji: string }> = {
   beauty:      { label: "ביוטי & איפור",    emoji: "💄" },
@@ -17,7 +17,10 @@ const CATEGORIES: Record<CategoryKey, { label: string; emoji: string }> = {
 };
 
 // ─── NANO BANANA PRESETS ──────────────────────────────────────────────────────
-const NANO_PREFIX = "Edit the provided source image. Keep the same person exactly the same: preserve identity, face, facial features, skin tone, hairstyle, body proportions, pose, camera angle, and original background. Change only the styling and accessories as requested. Keep the result realistic, fashionable, wearable, commercially appealing, and polished. ";
+const NANO_PREFIX =
+  "[Image-to-Image Edit] STRICT IDENTITY PRESERVATION. Retain the exact same person, original facial features, bone structure, eye shape, and skin tone. DO NOT airbrush or smooth the skin. Change ONLY the requested makeup, styling, and accessories to: ";
+const NANO_SUFFIX =
+  ". Shot on ARRI Alexa 65 with ARRI Prime DNA 50mm lens. High-end beauty editorial photography, exquisite studio lighting, hyper-realistic, unretouched RAW photo look, vivid details.";
 
 const PRESETS_NANO = {
   beauty: [
@@ -185,7 +188,10 @@ const PRESETS_NANO = {
 } as const;
 
 // ─── FLUX PRESETS ─────────────────────────────────────────────────────────────
-const FLUX_PREFIX = "Keep the same person, same face, same body, same pose, and same background. ";
+const FLUX_PREFIX =
+  "RAW photorealistic portrait. 100% EXACT FACIAL IDENTITY MATCH. Keep the same person, same facial proportions, original background, and exact pose. Emphasize natural skin texture and micro-details. NO plastic skin, NO CGI. Apply the following styling: ";
+const FLUX_SUFFIX =
+  ". Shot on ARRI Alexa 65 with ARRI Prime DNA 50mm lens, exquisite studio lighting, hyper-realistic editorial finish.";
 
 const PRESETS_FLUX = {
   beauty: [
@@ -353,7 +359,7 @@ const PRESETS_FLUX = {
 } as const;
 
 function findPreset(id: string, engine: Engine) {
-  const catalog = engine === "flux" ? PRESETS_FLUX : PRESETS_NANO;
+  const catalog = engine === "flux-pro" ? PRESETS_FLUX : PRESETS_NANO;
   for (const cat of Object.values(catalog)) {
     const found = (cat as { id: string; label: string; emoji: string; prompt: string }[]).find((p) => p.id === id);
     if (found) return found;
@@ -403,7 +409,7 @@ export default function StyleBooth() {
   const [wildcardId,       setWildcardId]       = useState<string | null>(null);
   const [activeCategory,   setActiveCategory]   = useState<CategoryKey>("beauty");
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
-  const [engine,           setEngine]           = useState<Engine>("nano-banana");
+  const [engine,           setEngine]           = useState<Engine>("nano-pro");
   const [outputUrl,        setOutputUrl]        = useState<string | null>(null);
   const [history,          setHistory]          = useState<string[]>([]);
   const [latency,          setLatency]          = useState<number | null>(null);
@@ -483,8 +489,39 @@ export default function StyleBooth() {
     setStatusMsg("Gemini מנתח את הסטייל שלך…");
     setError(null);
     try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(blob);
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          const maxDim = 1024;
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("No 2D context"));
+            return;
+          }
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+          const prefix = "data:image/jpeg;base64,";
+          const base64String = dataUrl.startsWith(prefix)
+            ? dataUrl.slice(prefix.length)
+            : dataUrl.split(",")[1] ?? "";
+          resolve(base64String);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("Image load error"));
+        };
+        img.src = objectUrl;
+      });
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -524,16 +561,60 @@ export default function StyleBooth() {
     const preset = findPreset(selectedPresetId ?? "", engine);
     if (!blob || !preset) return;
     setStep("generating");
-    setStatusMsg(`${engine === "flux" ? "FLUX 2 Pro" : "Nano Banana"} מייצר את הלוק שלך…`);
+    setStatusMsg(
+      `${
+        engine === "flux-pro"
+          ? "FLUX 2 Pro"
+          : engine === "seedream"
+            ? "Seedream 5 Lite"
+            : "Nano Banana Pro"
+      } מייצר את הלוק שלך…`
+    );
     setError(null);
     const t0 = performance.now();
     try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const fullPrompt =
+        (engine === "flux-pro" ? FLUX_PREFIX : NANO_PREFIX) +
+        preset.prompt +
+        (engine === "flux-pro" ? FLUX_SUFFIX : NANO_SUFFIX);
+
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(blob);
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          const maxDim = 1024;
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("No 2D context"));
+            return;
+          }
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+          const prefix = "data:image/jpeg;base64,";
+          const base64String = dataUrl.startsWith(prefix)
+            ? dataUrl.slice(prefix.length)
+            : dataUrl.split(",")[1] ?? "";
+          resolve(base64String);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("Image load error"));
+        };
+        img.src = objectUrl;
+      });
       const res = await fetch("/api/transform", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userInput: preset.prompt, imageBase64: base64, engine }),
+        body: JSON.stringify({ userInput: fullPrompt, imageBase64: base64, engine }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -569,7 +650,8 @@ export default function StyleBooth() {
     resetToCapture();
   }, [startCamera, stopCamera, resetToCapture]);
 
-  const currentPresets = (engine === "flux" ? PRESETS_FLUX : PRESETS_NANO)[activeCategory] as { id: string; label: string; emoji: string; prompt: string }[];
+  const currentPresets =
+    (engine === "flux-pro" ? PRESETS_FLUX : PRESETS_NANO)[activeCategory];
 
   // ── מסך תוצאה ──────────────────────────────────────────────────────────────
   if (step === "result" && outputUrl) {
@@ -580,7 +662,9 @@ export default function StyleBooth() {
           <div className="text-center space-y-1">
             <p className="text-[10px] uppercase tracking-[0.4em] text-[#c084a0] font-medium">Your Look</p>
             <h2 className="text-2xl font-bold text-[#f0eaec] tracking-tight">{activePreset?.label}</h2>
-            <p className="text-[11px] text-[#4a4450]">{engine === "flux" ? "FLUX 2 Pro" : "Nano Banana Pro"}</p>
+            <p className="text-[11px] text-[#4a4450]">
+              {engine === "flux-pro" ? "FLUX 2 Pro" : engine === "seedream" ? "Seedream 5 Lite" : "Nano Banana Pro"}
+            </p>
           </div>
           <div className="relative w-full rounded-2xl overflow-hidden border border-[#2a2530]" style={{ boxShadow: "0 32px 64px rgba(0,0,0,0.6)" }}>
             <img src={outputUrl} alt="לוק חדש" className="w-full object-cover block" />
@@ -671,7 +755,9 @@ export default function StyleBooth() {
           <div className="flex items-center gap-3">
             <span className="text-[10px] uppercase tracking-widest text-[#4a4450] font-medium">מנוע</span>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setEngine("nano-banana")}
+              <button
+                type="button"
+                onClick={() => setEngine("nano-banana")}
                 className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-all tracking-wide ${
                   engine === "nano-banana"
                     ? "bg-[#1e1a14] border-[#c4a45a]/50 text-[#c4a45a]"
@@ -679,13 +765,35 @@ export default function StyleBooth() {
                 }`}>
                 Nano Banana
               </button>
-              <button type="button" onClick={() => setEngine("flux")}
+              <button
+                type="button"
+                onClick={() => setEngine("nano-pro")}
                 className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-all tracking-wide ${
-                  engine === "flux"
+                  engine === "nano-pro"
+                    ? "bg-[#1e1a14] border-[#c4a45a]/50 text-[#c4a45a]"
+                    : "bg-transparent border-[#2a2530] text-[#4a4450] hover:text-[#8a8090] hover:border-[#3a3540]"
+                }`}>
+                Nano Banana Pro
+              </button>
+              <button
+                type="button"
+                onClick={() => setEngine("flux-pro")}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-all tracking-wide ${
+                  engine === "flux-pro"
                     ? "bg-[#141820] border-[#7090c4]/50 text-[#7090c4]"
                     : "bg-transparent border-[#2a2530] text-[#4a4450] hover:text-[#8a8090] hover:border-[#3a3540]"
                 }`}>
                 FLUX 2 Pro
+              </button>
+              <button
+                type="button"
+                onClick={() => setEngine("seedream")}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold border transition-all tracking-wide ${
+                  engine === "seedream"
+                    ? "bg-[#111820] border-[#8b5cf6]/50 text-[#c4b5fd]"
+                    : "bg-transparent border-[#2a2530] text-[#4a4450] hover:text-[#8a8090] hover:border-[#3a3540]"
+                }`}>
+                Seedream 5 Lite
               </button>
             </div>
           </div>

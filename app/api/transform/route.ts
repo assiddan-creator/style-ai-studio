@@ -1,20 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import Replicate from "replicate";
 
+// Replicate client (use typed `auth` field)
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN!,
 });
 
 const MODELS = {
-  "nano-banana": "google/nano-banana-pro",
-  "flux":        "black-forest-labs/flux-2-pro",
+  "nano-banana": "google/nano-banana",
+  "nano-pro": "google/nano-banana-pro",
+  "flux-pro": "black-forest-labs/flux-2-pro",
+  "seedream": "bytedance/seedream-5-lite",
 } as const;
 
 type EngineKey = keyof typeof MODELS;
 
 export async function POST(req: NextRequest) {
   try {
-    const { userInput, imageBase64, engine = "nano-banana" } = await req.json() as {
+    const { userInput, imageBase64, engine = "nano-pro" } = await req.json() as {
       userInput: string;
       imageBase64: string;
       engine?: EngineKey;
@@ -27,32 +30,48 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const model = MODELS[engine] ?? MODELS["nano-banana"];
-    const dataUri = `data:image/jpeg;base64,${imageBase64}`;
+    const model = MODELS[engine] ?? MODELS["nano-pro"];
+
+    // Ensure we have a proper data URI when needed
+    let formattedImage = imageBase64;
+    if (!formattedImage.startsWith("data:image")) {
+      formattedImage = `data:image/jpeg;base64,${imageBase64}`;
+    }
+
+    const dataUri = formattedImage;
 
     console.log(`[TRANSFORM] Engine: ${engine} | Preset: ${userInput.slice(0, 60)}...`);
 
     let output: unknown;
 
-    if (engine === "flux") {
-      // Flux 2 Pro: שדה input_images (מערך)
-      output = await replicate.run(model, {
-        input: {
-          prompt: userInput,
-          input_images: [dataUri],
-          output_format: "webp",
-          safety_tolerance: 2,
-        },
-      });
+    if (engine === "flux-pro") {
+      // FLUX.2 [pro]: single image is passed as `input_image`
+      const input = {
+        prompt: userInput,
+        input_image: dataUri,
+        output_format: "webp" as const,
+        safety_tolerance: 2,
+      };
+      console.log("[TRANSFORM] Replicate Input (flux):", JSON.stringify(input));
+      output = await replicate.run(model, { input });
+    } else if (engine === "seedream") {
+      // Seedream 5 Lite: image-to-image via `image_input` array
+      const input = {
+        prompt: userInput,
+        image_input: [dataUri],
+        size: "2K" as const,
+      };
+      console.log("[TRANSFORM] Replicate Input (seedream):", JSON.stringify(input));
+      output = await replicate.run(model, { input });
     } else {
-      // Nano Banana Pro: שדה image_input (מערך)
-      output = await replicate.run(model, {
-        input: {
-          prompt: userInput,
-          image_input: [dataUri],
-          output_format: "jpg",
-        },
-      });
+      // Nano Banana & Nano Banana Pro: both expect `image_input` as an array of data URI images
+      const input = {
+        prompt: userInput,
+        image_input: [formattedImage],
+        output_format: "jpg" as const,
+      };
+      console.log("[TRANSFORM] Replicate Input (nano):", JSON.stringify(input));
+      output = await replicate.run(model, { input });
     }
 
     // חילוץ URL מהתוצאה — שני המודלים מחזירים אובייקט עם .url()
