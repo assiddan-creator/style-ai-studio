@@ -65,14 +65,27 @@ export async function POST(req: NextRequest) {
       console.log("[TRANSFORM] Replicate Input (seedream):", JSON.stringify(input));
       output = await replicate.run(model, { input });
     } else {
-      // Nano Banana & Nano Banana Pro: both expect `image_input` as an array of data URI images
-      const input = {
-        prompt: userInput,
-        image_input: [formattedImage],
-        output_format: "jpg" as const,
-      };
-      console.log("[TRANSFORM] Replicate Input (nano):", JSON.stringify(input));
-      output = await replicate.run(model, { input });
+      // Nano Banana & Nano Banana Pro
+      if (engine === "nano-banana") {
+        // Standard Nano Banana: data URI in image_input array + negative prompt
+        const input = {
+          prompt: userInput,
+          image_input: [formattedImage],
+          negative_prompt: "blurry, low quality, distorted, deformed",
+          output_format: "jpg" as const,
+        };
+        console.log("[TRANSFORM] Replicate Input (nano-banana):", JSON.stringify(input));
+        output = await replicate.run(model, { input });
+      } else {
+        // Nano Banana Pro: same image_input structure, no negative prompt override
+        const input = {
+          prompt: userInput,
+          image_input: [formattedImage],
+          output_format: "jpg" as const,
+        };
+        console.log("[TRANSFORM] Replicate Input (nano-pro):", JSON.stringify(input));
+        output = await replicate.run(model, { input });
+      }
     }
 
     // חילוץ URL מהתוצאה — שני המודלים מחזירים אובייקט עם .url()
