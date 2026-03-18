@@ -825,11 +825,6 @@ export default function StyleBooth() {
   }, [selectedOccasion]);
 
   const handleExactLook = useCallback(async () => {
-    if (!selectedOccasion) {
-      alert("אנא בחר לאן אתה מתלבש");
-      return;
-    }
-
     const blobA = capturedBlobRef.current;
     if (!blobA) {
       alert("חובה להעלות תמונה בסיסית (תמונה א')");
@@ -842,13 +837,8 @@ export default function StyleBooth() {
       return;
     }
 
-    const strictPrompt = [
-      "Exact 1:1 garment swap.",
-      "Keep all original textures, logos, and patterns exactly as they appear in the reference image.",
-      "Do not hallucinate or change the garment design.",
-      "Only replace the target garment on the user; keep face, body, pose, lighting, background as close to original as possible.",
-      `Department/Occasion context: ${selectedOccasion}.`,
-    ].join(" ");
+    const strictPrompt =
+      "High fashion editorial photography. The person in Image A wearing the exact garment shown in Image B. Preserve all facial features, body type, pose, and background of Image A. Maintain 1:1 exact textures, logos, patterns, and colors of the garment in Image B without any alterations or hallucinations.";
 
     setIsGeneratingExactLook(true);
     setError(null);
@@ -916,7 +906,7 @@ export default function StyleBooth() {
       setStatusMsg("");
       setIsGeneratingExactLook(false);
     }
-  }, [selectedOccasion, engine]);
+  }, [engine]);
 
   const handlePresetLook = useCallback(async () => {
     console.log("handlePresetLook clicked", {
