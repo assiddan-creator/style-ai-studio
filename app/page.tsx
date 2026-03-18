@@ -823,6 +823,22 @@ export default function StyleBooth() {
     }
   }, [selectedOccasion]);
 
+  const handleExactLook = useCallback(async () => {
+    console.log("handleExactLook clicked", {
+      userImageA: Boolean(capturedBlobRef.current),
+      referenceImageB: Boolean(secondImageBlobRef.current),
+      selectedDepartment: selectedOccasion,
+    });
+  }, [selectedOccasion]);
+
+  const handlePresetLook = useCallback(async () => {
+    console.log("handlePresetLook clicked", {
+      userImageA: Boolean(capturedBlobRef.current),
+      referenceImageB: Boolean(secondImageBlobRef.current),
+      selectedDepartment: selectedOccasion,
+    });
+  }, [selectedOccasion]);
+
   const handleFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1026,12 +1042,12 @@ export default function StyleBooth() {
 
           <div className="p-4 rounded-2xl bg-[#161318] border border-[#2a2530] space-y-4">
             <p className="text-[10px] uppercase tracking-[0.3em] text-[#8a8090] font-medium text-right">
-              תמונה ב׳: השראת לבוש (אופציונלי)
+              Reference Garment (תמונה ב׳)
             </p>
             <div className="flex items-center gap-3">
               {secondImagePreview ? (
                 <>
-                  <img src={secondImagePreview} alt="Outfit reference" className="w-20 h-20 object-cover rounded-xl border border-[#2a2530] flex-shrink-0" />
+                  <img src={secondImagePreview} alt="Reference garment" className="w-20 h-20 object-cover rounded-xl border border-[#2a2530] flex-shrink-0" />
                   <button type="button" onClick={clearSecondImage}
                     className="text-xs text-[#8a8090] hover:text-[#c084a0] transition-colors underline">
                     הסר תמונה
@@ -1039,9 +1055,9 @@ export default function StyleBooth() {
                 </>
               ) : (
                 <button type="button" onClick={() => secondFileInputRef.current?.click()}
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[#3a3540] hover:border-[#c084a0]/50 text-[#5a5460] hover:text-[#c084a0] transition-all text-sm">
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-[#3a3540] hover:border-[#c084a0]/50 text-[#5a5460] hover:text-[#c084a0] transition-all text-sm">
                   <span>🖼️</span>
-                  בחר תמונה
+                  העלה פריט ייחוס (Image B)
                 </button>
               )}
             </div>
@@ -1062,6 +1078,29 @@ export default function StyleBooth() {
 
           {capturedBlobRef.current && (
             <div className="mt-4 mb-6">
+              <div className="p-4 rounded-2xl bg-[#161318] border border-[#2a2530] mb-4">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-[#8a8090] font-medium text-right mb-2">
+                  יצירה
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void handleExactLook()}
+                    disabled={!secondImageBlobRef.current}
+                    className="h-10 px-4 rounded-xl font-bold text-sm bg-[#f0eaec] text-[#0e0c10] hover:bg-white transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+                  >
+                    Try Exact Look
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handlePresetLook()}
+                    className="h-10 px-4 rounded-xl font-bold text-sm bg-[#0e0c10] text-[#f0eaec] border border-[#2a2530] hover:border-[#3a3540] hover:text-white transition-colors"
+                  >
+                    Generate from Preset
+                  </button>
+                </div>
+              </div>
+
               <div className="mb-3">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-[#8a8090] font-medium text-right mb-2">
                   לאן אתה מתלבש?
