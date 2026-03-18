@@ -431,6 +431,7 @@ export default function StyleBooth() {
   const [capturedImage,      setCapturedImage]      = useState<string | null>(null);
   const [secondImagePreview, setSecondImagePreview] = useState<string | null>(null);
   const [customPrompt,       setCustomPrompt]       = useState("");
+  const [generatedPrompt,    setGeneratedPrompt]    = useState("");
   const [step,               setStep]               = useState<AppStep>("capture");
   const [analysisText,       setAnalysisText]       = useState("");
   const [recommendedIds,     setRecommendedIds]     = useState<string[]>([]);
@@ -509,6 +510,7 @@ export default function StyleBooth() {
     setCapturedImage((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     setSecondImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     setCustomPrompt("");
+    setGeneratedPrompt("");
     capturedBlobRef.current = null;
     secondImageBlobRef.current = null;
     setStep("capture"); setAnalysisText(""); setRecommendedIds([]); setWildcardId(null);
@@ -699,6 +701,7 @@ export default function StyleBooth() {
         );
       }
       const promptData = (await promptRes.json()) as { prompt: string };
+      setGeneratedPrompt(promptData.prompt ?? "");
 
       const fullPrompt =
         (engine === "flux-pro" ? FLUX_PREFIX : NANO_PREFIX) +
@@ -741,6 +744,7 @@ export default function StyleBooth() {
     setRecommendedIds([]);
     setWildcardId(null);
     setSelectedPresetId(null);
+    setGeneratedPrompt("");
     setStep("pick-preset");
     e.target.value = "";
   }, []);
@@ -965,6 +969,35 @@ export default function StyleBooth() {
             </div>
           </div>
 
+          {capturedBlobRef.current && (
+            <div className="flex gap-2 justify-center mt-4 mb-6">
+              <button 
+                onClick={() => {
+                  setGeneratedPrompt(""); // CLEAR THE OLD PROMPT FIRST
+                  // Trigger your fetch to /api/prompt here
+                  void generateLook();
+                }}
+                className="h-9 px-3 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                ייעוץ סטייליסטית (AI)
+              </button>
+              
+              <button 
+                onClick={() => console.log("Action 2")}
+                className="h-9 px-3 text-sm bg-gray-700 text-white rounded hover:bg-gray-600"
+              >
+                כפתור 2
+              </button>
+              
+              <button 
+                onClick={() => console.log("Action 3")}
+                className="h-9 px-3 text-sm bg-gray-700 text-white rounded hover:bg-gray-600"
+              >
+                כפתור 3
+              </button>
+            </div>
+          )}
+
           <div className="flex gap-1.5 overflow-x-auto pb-0.5">
             {(Object.entries(CATEGORIES) as [CategoryKey, { label: string; emoji: string }][]).map(([key, cat]) => (
               <button key={key} type="button" onClick={() => setActiveCategory(key)}
@@ -999,35 +1032,6 @@ export default function StyleBooth() {
               );
             })}
           </div>
-
-          {capturedBlobRef.current && (
-            <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={generateLook}
-                disabled={step === "generating" || (!selectedPresetId && !secondImagePreview && !customPrompt.trim())}
-                className="w-full py-4 rounded-xl font-bold text-sm bg-[#f0eaec] text-[#0e0c10] hover:bg-white transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
-              >
-                {step === "generating"
-                  ? <span className="animate-pulse text-[#6a6470]">{statusMsg || "מייצר…"}</span>
-                  : "ייעוץ סטייליסטית (AI)"}
-              </button>
-              <button
-                type="button"
-                onClick={() => console.log("Action 2")}
-                className="w-full py-4 rounded-xl font-bold text-sm bg-[#161318] text-[#f0eaec] border border-[#2a2530] hover:border-[#3a3540] hover:text-white transition-colors"
-              >
-                כפתור 2
-              </button>
-              <button
-                type="button"
-                onClick={() => console.log("Action 3")}
-                className="w-full py-4 rounded-xl font-bold text-sm bg-[#161318] text-[#f0eaec] border border-[#2a2530] hover:border-[#3a3540] hover:text-white transition-colors"
-              >
-                כפתור 3
-              </button>
-            </div>
-          )}
 
           <button type="button" onClick={resetToCapture}
             className="text-[#3a3540] text-xs hover:text-[#6a6470] transition-colors text-center tracking-wide">
