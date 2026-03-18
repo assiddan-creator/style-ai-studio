@@ -594,8 +594,22 @@ export default function StyleBooth() {
     const preset = selectedPresetId ? findPreset(selectedPresetId, engine) : undefined;
     const hasImageB = Boolean(secondImageBlobRef.current);
     const hasCustomText = typeof customPrompt === "string" && customPrompt.trim().length > 0;
-    const valid = blob && (preset || hasImageB || hasCustomText);
-    if (!valid) return;
+    console.log("generateLook triggered!", {
+      hasPreset: Boolean(preset),
+      hasImageB,
+      customText: hasCustomText,
+    });
+    const valid = Boolean(blob) && (hasImageB || hasCustomText || Boolean(preset));
+    if (!valid) {
+      const msg = !blob
+        ? "Validation failed: missing Image A"
+        : "Validation failed: please select a preset or add Image B or enter custom text";
+      console.error(msg, { hasPreset: Boolean(preset), hasImageB, customText: hasCustomText });
+      setError(!blob
+        ? "חסרה תמונה א׳ — העלה/צלם תמונה לפני יצירה."
+        : "כדי להמשיך: בחר פריסט, או הוסף תמונה ב׳, או כתוב בקשה מיוחדת.");
+      return;
+    }
     setStep("generating");
     setStatusMsg(
       `${
