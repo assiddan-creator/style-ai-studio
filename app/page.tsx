@@ -432,6 +432,8 @@ export default function StyleBooth() {
   const [secondImagePreview, setSecondImagePreview] = useState<string | null>(null);
   const [customPrompt,       setCustomPrompt]       = useState("");
   const [generatedPrompt,    setGeneratedPrompt]    = useState("");
+  const [selectedOccasion,   setSelectedOccasion]   = useState<string | null>(null);
+  const [consultationText,   setConsultationText]   = useState("");
   const [step,               setStep]               = useState<AppStep>("capture");
   const [analysisText,       setAnalysisText]       = useState("");
   const [recommendedIds,     setRecommendedIds]     = useState<string[]>([]);
@@ -511,6 +513,8 @@ export default function StyleBooth() {
     setSecondImagePreview((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
     setCustomPrompt("");
     setGeneratedPrompt("");
+    setSelectedOccasion(null);
+    setConsultationText("");
     capturedBlobRef.current = null;
     secondImageBlobRef.current = null;
     setStep("capture"); setAnalysisText(""); setRecommendedIds([]); setWildcardId(null);
@@ -751,6 +755,74 @@ export default function StyleBooth() {
     } finally { setStatusMsg(""); }
   }, [selectedPresetId, engine, customPrompt]);
 
+  const handleConsultation = useCallback(async () => {
+    const blob = capturedBlobRef.current;
+    if (!blob) {
+      console.error("Validation failed: Image A is missing.");
+      alert("חובה להעלות תמונה בסיסית (תמונה א')");
+      return;
+    }
+    if (!selectedOccasion) {
+      alert("בחר לאן אתה מתלבש!");
+      return;
+    }
+
+    setConsultationText("");
+    setStatusMsg("אוחצ׳ה מסתכלת עליך…");
+    setError(null);
+    try {
+      const base64A = await new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(blob);
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          const maxDim = 1024;
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) {
+            reject(new Error("No 2D context"));
+            return;
+          }
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(img, 0, 0, w, h);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+          const prefix = "data:image/jpeg;base64,";
+          const base64String = dataUrl.startsWith(prefix)
+            ? dataUrl.slice(prefix.length)
+            : dataUrl.split(",")[1] ?? "";
+          resolve(base64String);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error("Image load error"));
+        };
+        img.src = objectUrl;
+      });
+
+      const res = await fetch("/api/consult", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64A: base64A, occasion: selectedOccasion }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || `שגיאת ייעוץ: ${res.status}`);
+      }
+      const data = (await res.json()) as { consultation: string };
+      setConsultationText(data.consultation ?? "");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "הייעוץ נכשל");
+    } finally {
+      setStatusMsg("");
+    }
+  }, [selectedOccasion]);
+
   const handleFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -989,37 +1061,80 @@ export default function StyleBooth() {
           </div>
 
           {capturedBlobRef.current && (
-            <div className="flex gap-2 justify-center mt-4 mb-6">
-              <button 
-                type="button"
-                onClick={async () => {
-                  setGeneratedPrompt(""); // CLEAR THE OLD PROMPT FIRST
-                  // Trigger your fetch to /api/prompt here
-                  await generateLook();
-                }}
-                className="h-9 px-3 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-              >
-                ייעוץ סטייליסטית (AI)
-              </button>
-              
-              <button 
-                type="button"
-                onClick={() => console.log("Action 2")}
-                className="h-9 px-3 text-sm bg-gray-700 text-white rounded hover:bg-gray-600"
-              >
-                כפתור 2
-              </button>
-              
-              <button 
-                type="button"
-                onClick={() => console.log("Action 3")}
-                className="h-9 px-3 text-sm bg-gray-700 text-white rounded hover:bg-gray-600"
-              >
-                כפתור 3
-              </button>
+            <div className="mt-4 mb-6">
+              <div className="mb-3">
+                <p className="text-[10px] uppercase tracking-[0.3em] text-[#8a8090] font-medium text-right mb-2">
+                  לאן אתה מתלבש?
+                </p>
+                <div className="flex gap-2 justify-center">
+                  {[
+                    { id: "casual", label: "קז'ואל" },
+                    { id: "night-out", label: "יציאה עם חברים" },
+                    { id: "family-event", label: "אירוע משפחתי" },
+                  ].map((o) => {
+                    const active = selectedOccasion === o.label;
+                    return (
+                      <button
+                        key={o.id}
+                        type="button"
+                        onClick={() => setSelectedOccasion(o.label)}
+                        className={`h-9 px-3 text-sm rounded border transition-colors ${
+                          active
+                            ? "bg-[#1e1318] border-[#c084a0] text-[#f0eaec]"
+                            : "bg-[#161318] border-[#2a2530] text-[#c8c0cc] hover:border-[#3a3540] hover:text-white"
+                        }`}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-center">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setGeneratedPrompt(""); // CLEAR THE OLD PROMPT FIRST
+                    void handleConsultation();
+                  }}
+                  className="h-9 px-3 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  ייעוץ סטייליסטית (AI)
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={() => console.log("Action 2")}
+                  className="h-9 px-3 text-sm bg-gray-700 text-white rounded hover:bg-gray-600"
+                >
+                  כפתור 2
+                </button>
+                
+                <button 
+                  type="button"
+                  onClick={() => console.log("Action 3")}
+                  className="h-9 px-3 text-sm bg-gray-700 text-white rounded hover:bg-gray-600"
+                >
+                  כפתור 3
+                </button>
+              </div>
+
+              {!!consultationText.trim() && (
+                <div className="mt-4 px-4 py-3 rounded-2xl bg-[#161318] border border-[#2a2530]">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#8a8090] font-medium text-right mb-2">
+                    הייעוץ של אוחצ׳ה
+                  </p>
+                  <blockquote className="text-sm text-[#f0eaec] leading-relaxed whitespace-pre-wrap">
+                    {consultationText}
+                  </blockquote>
+                </div>
+              )}
             </div>
           )}
 
+          {/*
+          ── OLD PRESET CATALOG (hidden, preserved for later) ─────────────────────
           <div className="flex gap-1.5 overflow-x-auto pb-0.5">
             {(Object.entries(CATEGORIES) as [CategoryKey, { label: string; emoji: string }][]).map(([key, cat]) => (
               <button key={key} type="button" onClick={() => setActiveCategory(key)}
@@ -1054,6 +1169,7 @@ export default function StyleBooth() {
               );
             })}
           </div>
+          */}
 
           <button type="button" onClick={resetToCapture}
             className="text-[#3a3540] text-xs hover:text-[#6a6470] transition-colors text-center tracking-wide">
