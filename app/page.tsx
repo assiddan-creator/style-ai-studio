@@ -434,6 +434,7 @@ export default function StyleBooth() {
   const [generatedPrompt,    setGeneratedPrompt]    = useState("");
   const [selectedOccasion,   setSelectedOccasion]   = useState<string | null>(null);
   const [consultationText,   setConsultationText]   = useState("");
+  const [isGeneratingExactLook, setIsGeneratingExactLook] = useState(false);
   const [step,               setStep]               = useState<AppStep>("capture");
   const [analysisText,       setAnalysisText]       = useState("");
   const [recommendedIds,     setRecommendedIds]     = useState<string[]>([]);
@@ -824,12 +825,98 @@ export default function StyleBooth() {
   }, [selectedOccasion]);
 
   const handleExactLook = useCallback(async () => {
-    console.log("handleExactLook clicked", {
-      userImageA: Boolean(capturedBlobRef.current),
-      referenceImageB: Boolean(secondImageBlobRef.current),
-      selectedDepartment: selectedOccasion,
-    });
-  }, [selectedOccasion]);
+    if (!selectedOccasion) {
+      alert("אנא בחר לאן אתה מתלבש");
+      return;
+    }
+
+    const blobA = capturedBlobRef.current;
+    if (!blobA) {
+      alert("חובה להעלות תמונה בסיסית (תמונה א')");
+      return;
+    }
+
+    const blobB = secondImageBlobRef.current;
+    if (!blobB) {
+      alert("חובה להעלות Reference Garment (תמונה ב׳) כדי לנסות Exact Look");
+      return;
+    }
+
+    const strictPrompt = [
+      "Exact 1:1 garment swap.",
+      "Keep all original textures, logos, and patterns exactly as they appear in the reference image.",
+      "Do not hallucinate or change the garment design.",
+      "Only replace the target garment on the user; keep face, body, pose, lighting, background as close to original as possible.",
+      `Department/Occasion context: ${selectedOccasion}.`,
+    ].join(" ");
+
+    setIsGeneratingExactLook(true);
+    setError(null);
+    setStatusMsg("מחליפים בגד 1:1…");
+    try {
+      const toBase64 = (blob: Blob) =>
+        new Promise<string>((resolve, reject) => {
+          const img = new Image();
+          const objectUrl = URL.createObjectURL(blob);
+          img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            const maxDim = 1024;
+            const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+            const w = Math.round(img.width * scale);
+            const h = Math.round(img.height * scale);
+            const canvas = document.createElement("canvas");
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              reject(new Error("No 2D context"));
+              return;
+            }
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            ctx.drawImage(img, 0, 0, w, h);
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+            const prefix = "data:image/jpeg;base64,";
+            const base64String = dataUrl.startsWith(prefix)
+              ? dataUrl.slice(prefix.length)
+              : dataUrl.split(",")[1] ?? "";
+            resolve(base64String);
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error("Image load error"));
+          };
+          img.src = objectUrl;
+        });
+
+      const [base64A, base64B] = await Promise.all([toBase64(blobA), toBase64(blobB)]);
+
+      const res = await fetch("/api/transform", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userInput: strictPrompt,
+          imagesBase64: [base64A, base64B],
+          engine,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || `שגיאה: ${res.status}`);
+      }
+      const data = (await res.json()) as { images: { url: string }[] };
+      const url = data.images?.[0]?.url;
+      if (!url) throw new Error("לא התקבלה תמונה");
+
+      setOutputUrl(url);
+      setHistory((prev) => (prev.includes(url) ? prev : [url, ...prev]));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Exact Look נכשל");
+    } finally {
+      setStatusMsg("");
+      setIsGeneratingExactLook(false);
+    }
+  }, [selectedOccasion, engine]);
 
   const handlePresetLook = useCallback(async () => {
     console.log("handlePresetLook clicked", {
@@ -1086,10 +1173,10 @@ export default function StyleBooth() {
                   <button
                     type="button"
                     onClick={() => void handleExactLook()}
-                    disabled={!secondImageBlobRef.current}
+                    disabled={isGeneratingExactLook || !secondImageBlobRef.current}
                     className="h-10 px-4 rounded-xl font-bold text-sm bg-[#f0eaec] text-[#0e0c10] hover:bg-white transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
                   >
-                    Try Exact Look
+                    {isGeneratingExactLook ? "Loading..." : "Try Exact Look"}
                   </button>
                   <button
                     type="button"
@@ -1100,6 +1187,17 @@ export default function StyleBooth() {
                   </button>
                 </div>
               </div>
+
+              {outputUrl && (
+                <div className="mb-4 p-3 rounded-2xl bg-[#0e0c10] border border-[#2a2530]">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-[#8a8090] font-medium text-right mb-2">
+                    תוצאה
+                  </p>
+                  <div className="rounded-xl overflow-hidden border border-[#2a2530]">
+                    <img src={outputUrl} alt="Generated exact look" className="w-full h-auto object-cover block" />
+                  </div>
+                </div>
+              )}
 
               <div className="mb-3">
                 <p className="text-[10px] uppercase tracking-[0.3em] text-[#8a8090] font-medium text-right mb-2">
