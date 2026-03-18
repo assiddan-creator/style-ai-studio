@@ -735,10 +735,15 @@ export default function StyleBooth() {
     setError(null);
     const optimized = await resizeAndCompress(file);
     capturedBlobRef.current = optimized;
-    setCapturedImage(URL.createObjectURL(optimized));
-    await analyzeWithGemini(optimized);
+    setCapturedImage((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(optimized); });
+    // Uploading Image A should only set state; user explicitly triggers AI actions.
+    setAnalysisText("");
+    setRecommendedIds([]);
+    setWildcardId(null);
+    setSelectedPresetId(null);
+    setStep("pick-preset");
     e.target.value = "";
-  }, [analyzeWithGemini]);
+  }, []);
 
   const handleSecondImageChange = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -995,13 +1000,34 @@ export default function StyleBooth() {
             })}
           </div>
 
-          <button type="button" onClick={generateLook}
-            disabled={step === "generating" || (!selectedPresetId && !secondImagePreview && !customPrompt.trim())}
-            className="w-full py-4 rounded-xl font-bold text-sm tracking-widest uppercase bg-[#f0eaec] text-[#0e0c10] hover:bg-white transition-colors disabled:opacity-25 disabled:cursor-not-allowed">
-            {step === "generating"
-              ? <span className="animate-pulse text-[#6a6470]">{statusMsg || "מייצר…"}</span>
-              : `Generate${selectedPresetId ? ` — ${findPreset(selectedPresetId, engine)?.label}` : secondImagePreview || customPrompt.trim() ? " (free-form)" : ""}`}
-          </button>
+          {capturedBlobRef.current && (
+            <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={generateLook}
+                disabled={step === "generating" || (!selectedPresetId && !secondImagePreview && !customPrompt.trim())}
+                className="w-full py-4 rounded-xl font-bold text-sm bg-[#f0eaec] text-[#0e0c10] hover:bg-white transition-colors disabled:opacity-25 disabled:cursor-not-allowed"
+              >
+                {step === "generating"
+                  ? <span className="animate-pulse text-[#6a6470]">{statusMsg || "מייצר…"}</span>
+                  : "ייעוץ סטייליסטית (AI)"}
+              </button>
+              <button
+                type="button"
+                onClick={() => console.log("Action 2")}
+                className="w-full py-4 rounded-xl font-bold text-sm bg-[#161318] text-[#f0eaec] border border-[#2a2530] hover:border-[#3a3540] hover:text-white transition-colors"
+              >
+                כפתור 2
+              </button>
+              <button
+                type="button"
+                onClick={() => console.log("Action 3")}
+                className="w-full py-4 rounded-xl font-bold text-sm bg-[#161318] text-[#f0eaec] border border-[#2a2530] hover:border-[#3a3540] hover:text-white transition-colors"
+              >
+                כפתור 3
+              </button>
+            </div>
+          )}
 
           <button type="button" onClick={resetToCapture}
             className="text-[#3a3540] text-xs hover:text-[#6a6470] transition-colors text-center tracking-wide">
