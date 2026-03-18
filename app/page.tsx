@@ -599,6 +599,11 @@ export default function StyleBooth() {
       hasImageB,
       customText: hasCustomText,
     });
+    if (!blob) {
+      console.error("Validation failed: Image A is missing.");
+      alert("חובה להעלות תמונה בסיסית (תמונה א')");
+      return;
+    }
     const valid = Boolean(blob) && (hasImageB || hasCustomText || Boolean(preset));
     if (!valid) {
       const msg = !blob
