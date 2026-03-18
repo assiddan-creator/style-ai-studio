@@ -972,10 +972,11 @@ export default function StyleBooth() {
           {capturedBlobRef.current && (
             <div className="flex gap-2 justify-center mt-4 mb-6">
               <button 
-                onClick={() => {
+                type="button"
+                onClick={async () => {
                   setGeneratedPrompt(""); // CLEAR THE OLD PROMPT FIRST
                   // Trigger your fetch to /api/prompt here
-                  void generateLook();
+                  await generateLook();
                 }}
                 className="h-9 px-3 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
               >
@@ -983,6 +984,7 @@ export default function StyleBooth() {
               </button>
               
               <button 
+                type="button"
                 onClick={() => console.log("Action 2")}
                 className="h-9 px-3 text-sm bg-gray-700 text-white rounded hover:bg-gray-600"
               >
@@ -990,6 +992,7 @@ export default function StyleBooth() {
               </button>
               
               <button 
+                type="button"
                 onClick={() => console.log("Action 3")}
                 className="h-9 px-3 text-sm bg-gray-700 text-white rounded hover:bg-gray-600"
               >
